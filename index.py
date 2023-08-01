@@ -4,11 +4,12 @@ import pdfplumber
 import docx
 import ebooklib
 from ebooklib import epub
+import io
 
 st.title("AudioBook Generator")
 st.info('ebook = audiobook')
 
-book = st.file_uploader('upload', type=['pdf', 'txt', 'docx', 'epub'])
+book = st.file_uploader('Upload an ebook', type=['pdf', 'txt', 'docx', 'epub'])
 
 def extract_text_from_docx(file):
     doc = docx.Document(file)
@@ -40,8 +41,7 @@ if book:
         all_text = extract_text_from_epub(book)
 
     tts = gTTS(all_text)
-    tts.save('audiobook.mp3')
+    audio_file = io.BytesIO()
+    tts.write_to_fp(audio_file)
 
-    audio_file = open('audiobook.mp3','rb')
-    audio_bytes = audio_file.read()
-    st.audio(audio_bytes, format='audio/wav', start_time=0)
+    st.audio(audio_file, format='audio/mpeg', start_time=0)
