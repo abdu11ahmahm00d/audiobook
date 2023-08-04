@@ -1,1 +1,1 @@
-# audiobook
+This is a comic book reading app built using streamlit. It has storage issues and does not work.
