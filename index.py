@@ -1,47 +1,54 @@
 import streamlit as st
-from gtts import gTTS
-import pdfplumber
-import docx
-import ebooklib
-from ebooklib import epub
-import io
+from PIL import Image
+import rarfile
+import zipfile
+import os
 
-st.title("AudioBook Generator")
-st.info('ebook = audiobook')
+# Set app title
+st.title("Comic Book Reader App")
 
-book = st.file_uploader('Upload an ebook', type=['pdf', 'txt', 'docx', 'epub'])
+# Upload a comic book file (CBR or CBZ)
+uploaded_file = st.file_uploader("Upload a comic book file", type=["cbr", "cbz"])
 
-def extract_text_from_docx(file):
-    doc = docx.Document(file)
-    full_text = []
-    for para in doc.paragraphs:
-        full_text.append(para.text)
-    return '\n'.join(full_text)
+if uploaded_file is not None:
+    # Create a temporary directory to extract the files
+    temp_dir = st._get_session().__dict__.setdefault('temp_dir', None)
+    if temp_dir is None:
+        temp_dir = st._get_session().temp_dir = os.path.join(st._config.session_directory, 'temp')
+        os.makedirs(temp_dir, exist_ok=True)
 
-def extract_text_from_epub(file):
-    book = epub.read_epub(file)
-    chapters = []
-    for item in book.get_items():
-        if item.get_type() == ebooklib.ITEM_DOCUMENT:
-            chapters.append(item.get_content())
-    return '\n'.join(chapters)
+    # Extract images from the archive
+    with open(os.path.join(temp_dir, uploaded_file.name), "wb") as f:
+        f.write(uploaded_file.read())
 
-if book:
-    if book.type == 'application/pdf':
-        all_text = ""
-        with pdfplumber.open(book) as pdf:
-            for text in pdf.pages:
-                single_page_text = text.extract_text()
-                all_text = all_text + '\n' + str(single_page_text)
-    elif book.type == 'text/plain':
-        all_text = book.read().decode("utf-8")
-    elif book.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-        all_text = extract_text_from_docx(book)
-    elif book.type == 'application/epub+zip':
-        all_text = extract_text_from_epub(book)
+    if uploaded_file.name.lower().endswith('.cbr'):
+        with rarfile.RarFile(os.path.join(temp_dir, uploaded_file.name)) as archive:
+            archive.extractall(temp_dir)
+    elif uploaded_file.name.lower().endswith('.cbz'):
+        with zipfile.ZipFile(os.path.join(temp_dir, uploaded_file.name)) as archive:
+            archive.extractall(temp_dir)
 
-    tts = gTTS(all_text)
-    audio_file = io.BytesIO()
-    tts.write_to_fp(audio_file)
+    # List extracted images
+    extracted_images = [os.path.join(temp_dir, filename) for filename in os.listdir(temp_dir) if filename.lower().endswith(('jpg', 'jpeg', 'png'))]
 
-    st.audio(audio_file, format='audio/mpeg', start_time=0)
+    if extracted_images:
+        # Display uploaded images
+        images = [Image.open(image) for image in extracted_images]
+        total_pages = len(images)
+
+        # Page navigation
+        st.sidebar.title("Navigation")
+        page_number = st.sidebar.number_input("Go to page", value=1, min_value=1, max_value=total_pages)
+
+        # Display the selected page
+        st.image(images[page_number - 1], caption=f"Page {page_number}/{total_pages}", use_column_width=True)
+
+        # Previous and next page buttons
+        col1, col2, col3 = st.beta_columns(3)
+        if col2.button("Previous Page", key="prev"):
+            page_number = max(1, page_number - 1)
+        if col2.button("Next Page", key="next"):
+            page_number = min(total_pages, page_number + 1)
+
+        # Update displayed image based on page_number
+        st.image(images[page_number - 1], caption=f"Page {page_number}/{total_pages}", use_column_width=True)
